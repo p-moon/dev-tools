@@ -10,7 +10,7 @@ use walkdir::WalkDir;
 const JSON_FILE: &str = ".git_projects.json";
 
 #[derive(Parser)]
-#[command(name = "each-all-project-rs")]
+#[command(name = "pm-tool")]
 #[command(about = "批量管理当前目录下所有 git 项目（scan/clone/grep/pull）", long_about = None)]
 struct Cli {
     #[command(subcommand)]
