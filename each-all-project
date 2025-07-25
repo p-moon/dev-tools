@@ -1,15 +1,17 @@
 #!/bin/bash
 
-json_file="${HIME}/.git_projects.json"
+json_file="${HOME}/.git_projects.json"
 
 usage() {
     echo "用法:"
-    echo "  $0 scan   # 扫描当前目录下所有 git 项目并生成 $json_file"
-    echo "  $0 clone  # 读取 $json_file 并按远程路径 clone 到对应目录"
+    echo "  $0 scan                # 扫描当前目录下所有 git 项目并生成 $json_file"
+    echo "  $0 clone               # 读取 $json_file 并按远程路径 clone 到对应目录"
+    echo "  $0 grep <pattern>      # 对所有项目执行 git grep （搜索所有 commit）"
+    echo "  $0 pull                # 对所有项目自动切换 master 分支并拉取最新代码"
     exit 1
 }
 
-if [ $# -ne 1 ]; then
+if [ $# -lt 1 ]; then
     usage
 fi
 
@@ -58,10 +60,8 @@ clone_from_json() {
         remote=$(echo "$item" | jq -r '.remote')
         # 支持 git@ 和 https:// 两种格式
         if [[ "$remote" =~ ^git@ ]]; then
-            # git@coding.jd.com:ins-tamp/tamp-supplier-trade.git
             repo_path=$(echo "$remote" | sed -E 's#^[^:]+:(.+)\.git$#\1#')
         else
-            # https://coding.jd.com/ins-tamp/tamp-supplier-trade.git
             repo_path=$(echo "$remote" | sed -E 's#^https?://[^/]+/(.+)\.git$#\1#')
         fi
 
@@ -81,6 +81,40 @@ clone_from_json() {
     done
 }
 
+# 对所有项目执行 grep
+grep_all_projects() {
+    if [ $# -lt 1 ]; then
+        echo "用法: $0 grep <search_pattern>"
+        exit 1
+    fi
+    search_pattern="$1"
+    find . -type d -name ".git" | while read gitdir; do
+        repo_dir=$(dirname "$gitdir")
+        cd "$repo_dir" || continue
+        echo "Processing Git repository in $repo_dir"
+        git grep "$search_pattern" $(git rev-list --all)
+        cd - > /dev/null
+    done
+}
+
+# 对所有项目执行 pull
+pull_all_projects() {
+    find . -type d -name ".git" | while read gitdir; do
+        repo_dir=$(dirname "$gitdir")
+        cd "$repo_dir" || continue
+        echo "Processing Git repository in $repo_dir"
+        if [ -n "$(git status --porcelain)" ]; then
+            echo "Changes detected, adding to staging area..."
+            git add .
+            git stash
+        fi
+        git checkout master
+        git pull origin master
+        echo "Updated $repo_dir"
+        cd - > /dev/null
+    done
+}
+
 case "$1" in
     scan)
         scan_git_projects
@@ -88,7 +122,14 @@ case "$1" in
     clone)
         clone_from_json
         ;;
+    grep)
+        shift
+        grep_all_projects "$@"
+        ;;
+    pull)
+        pull_all_projects
+        ;;
     *)
         usage
-        ;
+        ;;
 esac
