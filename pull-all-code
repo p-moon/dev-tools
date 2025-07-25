@@ -1,0 +1,30 @@
+#!/bin/bash
+#!/bin/bash
+
+# 查找当前目录下所有包含 .git 目录的子目录
+find . -type d -name ".git" | while read gitdir; do
+    # 获取 .git 目录所在的项目目录
+    repo_dir=$(dirname "$gitdir")
+    
+    # 进入项目目录
+    cd "$repo_dir" || continue
+
+    echo "Processing Git repository in $repo_dir"
+
+    # 检查是否有未暂存的修改
+    if [ -n "$(git status --porcelain)" ]; then
+        echo "Changes detected, adding to staging area..."
+        git add .
+        git stash
+    fi
+    # 切换到 master 分支
+    git checkout master
+
+    # 拉取最新的 master 分支代码
+    git pull origin master
+
+    echo "Updated $repo_dir"
+
+    # 返回起始目录
+    cd - > /dev/null
+done

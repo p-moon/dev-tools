@@ -1,0 +1,94 @@
+#!/bin/bash
+
+json_file="${HIME}/.git_projects.json"
+
+usage() {
+    echo "用法:"
+    echo "  $0 scan   # 扫描当前目录下所有 git 项目并生成 $json_file"
+    echo "  $0 clone  # 读取 $json_file 并按远程路径 clone 到对应目录"
+    exit 1
+}
+
+if [ $# -ne 1 ]; then
+    usage
+fi
+
+# 生成 JSON
+scan_git_projects() {
+    echo "[" > "$json_file"
+    first=1
+
+    find . -type d -name ".git" | while read gitdir; do
+        repo_dir=$(dirname "$gitdir")
+        cd "$repo_dir" || continue
+        remote=$(git remote get-url origin 2>/dev/null)
+        cd - > /dev/null
+
+        # 跳过没有远程的项目
+        if [ -z "$remote" ]; then
+            continue
+        fi
+
+        if [ $first -eq 0 ]; then
+            echo "," >> "$json_file"
+        fi
+        first=0
+
+        printf '  {"remote": "%s"}' "$remote" >> "$json_file"
+    done
+
+    echo "" >> "$json_file"
+    echo "]" >> "$json_file"
+    echo "已生成 $json_file"
+}
+
+# 读取 JSON 并 clone
+clone_from_json() {
+    if ! command -v jq &> /dev/null; then
+        echo "请先安装 jq 工具"
+        exit 1
+    fi
+
+    if [ ! -f "$json_file" ]; then
+        echo "$json_file 不存在，请先执行 $0 scan"
+        exit 1
+    fi
+
+    jq -c '.[]' "$json_file" | while read item; do
+        remote=$(echo "$item" | jq -r '.remote')
+        # 支持 git@ 和 https:// 两种格式
+        if [[ "$remote" =~ ^git@ ]]; then
+            # git@coding.jd.com:ins-tamp/tamp-supplier-trade.git
+            repo_path=$(echo "$remote" | sed -E 's#^[^:]+:(.+)\.git$#\1#')
+        else
+            # https://coding.jd.com/ins-tamp/tamp-supplier-trade.git
+            repo_path=$(echo "$remote" | sed -E 's#^https?://[^/]+/(.+)\.git$#\1#')
+        fi
+
+        if [ -z "$repo_path" ]; then
+            echo "无法解析仓库路径: $remote"
+            continue
+        fi
+
+        if [ -d "$repo_path" ]; then
+            echo "目录 $repo_path 已存在，跳过。"
+            continue
+        fi
+
+        mkdir -p "$(dirname "$repo_path")"
+        echo "正在 clone $remote 到 $repo_path ..."
+        git clone "$remote" "$repo_path"
+    done
+}
+
+case "$1" in
+    scan)
+        scan_git_projects
+        ;;
+    clone)
+        clone_from_json
+        ;;
+    *)
+        usage
+        ;
+esac

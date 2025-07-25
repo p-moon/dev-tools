@@ -1,0 +1,27 @@
+#!/bin/bash
+
+# 检查是否提供了搜索模式
+if [ $# -lt 1 ]; then
+    echo "Usage: $0 <search_pattern>"
+    exit 1
+fi
+
+# 获取传入的搜索模式
+search_pattern="$1"
+
+# 查找当前目录下所有包含 .git 目录的子目录
+find . -type d -name ".git" | while read gitdir; do
+    # 获取 .git 目录所在的项目目录
+    repo_dir=$(dirname "$gitdir")
+
+    # 进入项目目录
+    cd "$repo_dir" || continue
+
+    echo "Processing Git repository in $repo_dir"
+
+    # 搜索指定的模式
+    git grep "$search_pattern" $(git rev-list --all)
+
+    # 返回起始目录
+    cd - > /dev/null
+done
